@@ -4,8 +4,6 @@ import numpy as np
 import plotly.express as px
 import pandasql as ps
 from sklearn.linear_model import LinearRegression
-from fpdf import FPDF
-import os
 
 st.set_page_config(page_title="DataSage AI Pro", layout="wide")
 
@@ -34,7 +32,7 @@ menu = st.sidebar.radio(
         "SQL Lab",
         "ML Prediction",
         "AI Query",
-        "Export PDF",
+        "Chat with AI"
     ],
 )
 
@@ -53,7 +51,7 @@ def get_df():
 
 if menu == "Upload Data":
 
-    st.title("Upload CSV Dataset")
+    st.title("📂 Upload CSV Dataset")
 
     files = st.file_uploader(
         "Upload CSV Files", type=["csv"], accept_multiple_files=True
@@ -81,7 +79,7 @@ if menu == "Upload Data":
 
 elif menu == "Data Cleaning":
 
-    st.title("Data Cleaning")
+    st.title("🧹 Data Cleaning")
 
     df = get_df()
 
@@ -96,7 +94,7 @@ elif menu == "Data Cleaning":
             ["Fill Mean", "Fill Median", "Drop Rows"],
         )
 
-        if st.button("Apply"):
+        if st.button("Apply Cleaning"):
 
             if option == "Fill Mean":
                 df = df.fillna(df.mean(numeric_only=True))
@@ -132,14 +130,13 @@ elif menu == "Data Cleaning":
 
 elif menu == "Visualization":
 
-    st.title("Visualization")
+    st.title("📊 Data Visualization")
 
     df = get_df()
 
     if df is not None:
 
         num_cols = df.select_dtypes(include=np.number).columns
-
         all_cols = df.columns
 
         chart = st.selectbox(
@@ -179,12 +176,6 @@ elif menu == "Visualization":
 
             st.plotly_chart(fig, use_container_width=True)
 
-            if st.button("Save Chart to Report"):
-
-                st.session_state.charts.append(fig)
-
-                st.success("Chart saved")
-
     else:
 
         st.warning("Upload dataset first")
@@ -194,7 +185,7 @@ elif menu == "Visualization":
 
 elif menu == "AI Insights":
 
-    st.title("AI Insights")
+    st.title("🧠 AI Insights")
 
     df = get_df()
 
@@ -226,7 +217,7 @@ elif menu == "AI Insights":
 
 elif menu == "SQL Lab":
 
-    st.title("SQL Query Lab")
+    st.title("🗄️ SQL Query Lab")
 
     df = get_df()
 
@@ -258,7 +249,7 @@ elif menu == "SQL Lab":
 
 elif menu == "ML Prediction":
 
-    st.title("Machine Learning Prediction")
+    st.title("🤖 Machine Learning Prediction")
 
     df = get_df()
 
@@ -301,15 +292,15 @@ elif menu == "ML Prediction":
 
 elif menu == "AI Query":
 
-    st.title("Natural Language Query")
+    st.title("🔍 Natural Language Query")
 
     df = get_df()
 
     if df is not None:
 
-        question = st.text_input("Ask question")
+        question = st.text_input("Ask question about dataset")
 
-        if st.button("Run AI Query"):
+        if st.button("Run Query"):
 
             q = question.lower()
 
@@ -346,67 +337,61 @@ elif menu == "AI Query":
         st.warning("Upload dataset first")
 
 
-# ---------------- EXPORT PDF ----------------
+# ---------------- CHAT WITH AI ----------------
 
-elif menu == "Export PDF":
+elif menu == "Chat with AI":
 
-    st.title("Export PDF Report")
+    st.title("🤖 Chat with Your Data")
 
     df = get_df()
 
     if df is not None:
 
-        if st.button("Generate Report"):
+        if "chat_history" not in st.session_state:
+            st.session_state.chat_history = []
 
-            pdf = FPDF()
+        user_input = st.text_input("Ask something about the dataset")
 
-            pdf.add_page()
+        if st.button("Ask AI"):
 
-            pdf.set_font("Arial", size=16)
-            pdf.cell(0, 10, "DataSage AI Report", ln=True)
+            question = user_input.lower()
 
-            pdf.set_font("Arial", size=10)
+            response = None
 
-            pdf.cell(0, 10, f"Rows: {df.shape[0]}", ln=True)
-            pdf.cell(0, 10, f"Columns: {df.shape[1]}", ln=True)
+            if "rows" in question:
+                response = f"The dataset has {df.shape[0]} rows."
 
-            pdf.ln(10)
+            elif "columns" in question:
+                response = f"The dataset has {df.shape[1]} columns."
 
-            # Add charts to PDF
-            if st.session_state.charts:
+            elif "top" in question:
+                response = df.head()
 
-                for i, fig in enumerate(st.session_state.charts):
+            elif "summary" in question:
+                response = df.describe()
 
-                    try:
+            elif "mean" in question:
+                response = df.mean(numeric_only=True)
 
-                        img_bytes = fig.to_image(format="png")
+            elif "max" in question:
+                response = df.max(numeric_only=True)
 
-                        filename = f"chart{i}.png"
+            elif "min" in question:
+                response = df.min(numeric_only=True)
 
-                        with open(filename, "wb") as f:
-                            f.write(img_bytes)
+            else:
+                response = "Sorry, I don't understand that question yet."
 
-                        pdf.image(filename, x=10, w=180)
+            st.session_state.chat_history.append(("You", user_input))
+            st.session_state.chat_history.append(("AI", response))
 
-                        pdf.ln(10)
+        for speaker, message in st.session_state.chat_history:
 
-                        os.remove(filename)
-
-                    except:
-
-                        pass
-
-            file = "datasage_report.pdf"
-
-            pdf.output(file)
-
-            with open(file, "rb") as f:
-
-                st.download_button(
-                    "Download Report",
-                    f,
-                    file_name=file,
-                )
+            if speaker == "You":
+                st.write(f"🧑 **You:** {message}")
+            else:
+                st.write("🤖 **AI:**")
+                st.write(message)
 
     else:
 
