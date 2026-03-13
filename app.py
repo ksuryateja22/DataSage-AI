@@ -206,7 +206,7 @@ elif menu == "Export PDF":
         pdf.cell(0, 10, f"Generated {pd.Timestamp.now()}", ln=True)
 
         for fig in st.session_state.figures:
-            img_bytes = fig.to_image(format="png")
+            st.plotly_chart(fig, use_container_width=True)
             with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmpfile:
                 tmpfile.write(img_bytes)
                 tmpfile_path = tmpfile.name
