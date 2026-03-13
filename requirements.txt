@@ -5,5 +5,3 @@ plotly
 pandasql
 scikit-learn
 fpdf
-kaleido
-chromedriver-binary
