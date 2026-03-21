@@ -30,6 +30,7 @@ with st.sidebar:
     menu = st.radio("Modules", [
         "📁 Data Integration",
         "🧹 Stat-Cleaning",
+        "📊 Visualization",
         "🔬 Inference Lab",
         "📉 Risk Analytics",
         "🤖 ML Engine",
@@ -49,12 +50,10 @@ if menu == "📁 Data Integration":
             st.write(f"Rows: {df.shape[0]}, Columns: {df.shape[1]}")
             st.dataframe(df)
 
-        # If only 1 file → auto select
         if len(dfs) == 1:
             st.session_state.merged_df = list(dfs.values())[0]
             st.success("Single dataset loaded.")
 
-        # If 2+ files → merge option
         if len(dfs) >= 2:
             st.subheader("🔗 Merge Datasets")
             keys = list(dfs.keys())
@@ -86,15 +85,23 @@ elif menu == "🧹 Stat-Cleaning":
         else:
             st.success("Normal distribution → Mean is fine")
 
-        method = st.radio("Method", ["Mean", "Median", "Drop Nulls"])
+        method = st.radio("Method", ["Mean", "Median", "Drop Nulls", "Remove Duplicates"])
 
         if st.button("Apply"):
             if method == "Mean":
                 df[col] = df[col].fillna(df[col].mean())
+
             elif method == "Median":
                 df[col] = df[col].fillna(df[col].median())
-            else:
+
+            elif method == "Drop Nulls":
                 df = df.dropna(subset=[col])
+
+            elif method == "Remove Duplicates":
+                before = df.shape[0]
+                df = df.drop_duplicates()
+                after = df.shape[0]
+                st.success(f"Removed {before - after} duplicate rows")
 
             st.session_state.merged_df = df
             st.success("Cleaning applied")
@@ -102,7 +109,35 @@ elif menu == "🧹 Stat-Cleaning":
     else:
         st.warning("Upload data first")
 
-# ---------------- 3. INFERENCE ----------------
+# ---------------- 3. VISUALIZATION ----------------
+elif menu == "📊 Visualization":
+    st.title("📊 Data Visualization")
+    df = st.session_state.merged_df
+
+    if df is not None:
+        cols = df.columns
+        num_cols = df.select_dtypes(include=np.number).columns
+
+        chart_type = st.selectbox("Chart Type", ["Bar", "Line", "Scatter", "Histogram"])
+        x = st.selectbox("X-axis", cols)
+        y = st.selectbox("Y-axis", num_cols)
+
+        if st.button("Generate Chart"):
+            if chart_type == "Bar":
+                fig = px.bar(df, x=x, y=y)
+            elif chart_type == "Line":
+                fig = px.line(df, x=x, y=y)
+            elif chart_type == "Scatter":
+                fig = px.scatter(df, x=x, y=y)
+            else:
+                fig = px.histogram(df, x=x)
+
+            st.plotly_chart(fig, width='stretch')
+
+    else:
+        st.warning("Upload data first")
+
+# ---------------- 4. INFERENCE ----------------
 elif menu == "🔬 Inference Lab":
     st.title("🔬 Hypothesis Testing")
     df = st.session_state.merged_df
@@ -127,7 +162,7 @@ elif menu == "🔬 Inference Lab":
     else:
         st.warning("Upload data first")
 
-# ---------------- 4. RISK ANALYTICS ----------------
+# ---------------- 5. RISK ANALYTICS ----------------
 elif menu == "📉 Risk Analytics":
     st.title("📉 Outlier Detection")
     df = st.session_state.merged_df
@@ -149,7 +184,7 @@ elif menu == "📉 Risk Analytics":
     else:
         st.warning("Upload data first")
 
-# ---------------- 5. ML ENGINE ----------------
+# ---------------- 6. ML ENGINE ----------------
 elif menu == "🤖 ML Engine":
     st.title("🤖 Machine Learning")
     df = st.session_state.merged_df
@@ -179,7 +214,7 @@ elif menu == "🤖 ML Engine":
     else:
         st.warning("Upload data first")
 
-# ---------------- 6. SQL ----------------
+# ---------------- 7. SQL ----------------
 elif menu == "🔍 SQL Workspace":
     st.title("🔍 SQL Lab")
     df = st.session_state.merged_df
