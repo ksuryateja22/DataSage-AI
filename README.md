@@ -1,4 +1,4 @@
-# DataSage AI Pro
+# DataBoss AI Pro
 
 AI-powered data analytics platform built with Python and Streamlit.
 
