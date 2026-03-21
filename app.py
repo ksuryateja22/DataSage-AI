@@ -59,52 +59,64 @@ if menu == "📁 Data Integration":
             keys = list(dfs.keys())
             t1 = st.selectbox("Dataset A", keys)
             t2 = st.selectbox("Dataset B", keys)
-            join_col = st.text_input("Join Column")
 
-            if st.button("Merge"):
-                try:
-                    st.session_state.merged_df = pd.merge(dfs[t1], dfs[t2], on=join_col, how="inner")
-                    st.success("Datasets merged successfully.")
-                except Exception as e:
-                    st.error(e)
+            common_cols = list(set(dfs[t1].columns).intersection(set(dfs[t2].columns)))
+
+            if common_cols:
+                join_col = st.selectbox("Join Column", common_cols)
+
+                if st.button("Merge"):
+                    try:
+                        merged = pd.merge(dfs[t1], dfs[t2], on=join_col, how="inner")
+                        st.session_state.merged_df = merged.reset_index(drop=True)
+                        st.success("Datasets merged successfully.")
+                    except Exception as e:
+                        st.error(e)
+            else:
+                st.error("No common columns to join")
 
 # ---------------- 2. STAT CLEANING ----------------
 elif menu == "🧹 Stat-Cleaning":
     st.title("🧹 Statistical Cleaning")
     df = st.session_state.merged_df
 
-    if df is not None:
-        num_cols = df.select_dtypes(include=np.number).columns
-        col = st.selectbox("Select Column", num_cols)
+    if df is not None and not df.empty:
+        num_cols = df.select_dtypes(include=np.number).columns.tolist()
 
-        skew_val = skew(df[col].dropna())
-        st.metric("Skewness", f"{skew_val:.2f}")
+        if num_cols:
+            col = st.selectbox("Select Column", num_cols)
 
-        if abs(skew_val) > 0.5:
-            st.warning("High skew → Median preferred")
+            if col in df.columns:
+                skew_val = skew(df[col].dropna())
+                st.metric("Skewness", f"{skew_val:.2f}")
+
+                if abs(skew_val) > 0.5:
+                    st.warning("High skew → Median preferred")
+                else:
+                    st.success("Normal distribution → Mean is fine")
+
+                method = st.radio("Method", ["Mean", "Median", "Drop Nulls", "Remove Duplicates"])
+
+                if st.button("Apply"):
+                    if method == "Mean":
+                        df[col] = df[col].fillna(df[col].mean())
+
+                    elif method == "Median":
+                        df[col] = df[col].fillna(df[col].median())
+
+                    elif method == "Drop Nulls":
+                        df = df.dropna(subset=[col])
+
+                    elif method == "Remove Duplicates":
+                        before = df.shape[0]
+                        df = df.drop_duplicates()
+                        after = df.shape[0]
+                        st.success(f"Removed {before - after} duplicate rows")
+
+                    st.session_state.merged_df = df.reset_index(drop=True)
+                    st.success("Cleaning applied")
         else:
-            st.success("Normal distribution → Mean is fine")
-
-        method = st.radio("Method", ["Mean", "Median", "Drop Nulls", "Remove Duplicates"])
-
-        if st.button("Apply"):
-            if method == "Mean":
-                df[col] = df[col].fillna(df[col].mean())
-
-            elif method == "Median":
-                df[col] = df[col].fillna(df[col].median())
-
-            elif method == "Drop Nulls":
-                df = df.dropna(subset=[col])
-
-            elif method == "Remove Duplicates":
-                before = df.shape[0]
-                df = df.drop_duplicates()
-                after = df.shape[0]
-                st.success(f"Removed {before - after} duplicate rows")
-
-            st.session_state.merged_df = df
-            st.success("Cleaning applied")
+            st.warning("No numeric columns found")
 
     else:
         st.warning("Upload data first")
@@ -114,25 +126,28 @@ elif menu == "📊 Visualization":
     st.title("📊 Data Visualization")
     df = st.session_state.merged_df
 
-    if df is not None:
-        cols = df.columns
-        num_cols = df.select_dtypes(include=np.number).columns
+    if df is not None and not df.empty:
+        cols = df.columns.tolist()
+        num_cols = df.select_dtypes(include=np.number).columns.tolist()
 
         chart_type = st.selectbox("Chart Type", ["Bar", "Line", "Scatter", "Histogram"])
         x = st.selectbox("X-axis", cols)
-        y = st.selectbox("Y-axis", num_cols)
+        y = st.selectbox("Y-axis", num_cols) if num_cols else None
 
         if st.button("Generate Chart"):
-            if chart_type == "Bar":
-                fig = px.bar(df, x=x, y=y)
-            elif chart_type == "Line":
-                fig = px.line(df, x=x, y=y)
-            elif chart_type == "Scatter":
-                fig = px.scatter(df, x=x, y=y)
-            else:
-                fig = px.histogram(df, x=x)
+            try:
+                if chart_type == "Bar":
+                    fig = px.bar(df, x=x, y=y)
+                elif chart_type == "Line":
+                    fig = px.line(df, x=x, y=y)
+                elif chart_type == "Scatter":
+                    fig = px.scatter(df, x=x, y=y)
+                else:
+                    fig = px.histogram(df, x=x)
 
-            st.plotly_chart(fig, width='stretch')
+                st.plotly_chart(fig, width='stretch')
+            except Exception as e:
+                st.error(e)
 
     else:
         st.warning("Upload data first")
@@ -142,22 +157,26 @@ elif menu == "🔬 Inference Lab":
     st.title("🔬 Hypothesis Testing")
     df = st.session_state.merged_df
 
-    if df is not None:
-        cols = df.select_dtypes(include=np.number).columns
-        c1, c2 = st.columns(2)
+    if df is not None and not df.empty:
+        cols = df.select_dtypes(include=np.number).columns.tolist()
 
-        v1 = c1.selectbox("Variable 1", cols)
-        v2 = c2.selectbox("Variable 2", cols)
+        if len(cols) >= 2:
+            v1 = st.selectbox("Variable 1", cols)
+            v2 = st.selectbox("Variable 2", cols)
 
-        if st.button("Run T-Test"):
-            t_stat, p_val = ttest_ind(df[v1].dropna(), df[v2].dropna())
+            if st.button("Run T-Test"):
+                try:
+                    t_stat, p_val = ttest_ind(df[v1].dropna(), df[v2].dropna())
+                    st.write(f"P-value: {p_val:.4f}")
 
-            st.write(f"P-value: {p_val:.4f}")
-
-            if p_val < 0.05:
-                st.success("Statistically Significant")
-            else:
-                st.error("Not Significant")
+                    if p_val < 0.05:
+                        st.success("Statistically Significant")
+                    else:
+                        st.error("Not Significant")
+                except Exception as e:
+                    st.error(e)
+        else:
+            st.warning("Need at least 2 numeric columns")
 
     else:
         st.warning("Upload data first")
@@ -167,19 +186,25 @@ elif menu == "📉 Risk Analytics":
     st.title("📉 Outlier Detection")
     df = st.session_state.merged_df
 
-    if df is not None:
-        cols = df.select_dtypes(include=np.number).columns
-        col = st.selectbox("Column", cols)
+    if df is not None and not df.empty:
+        cols = df.select_dtypes(include=np.number).columns.tolist()
 
-        z = np.abs(stats.zscore(df[col].dropna()))
-        outliers = df.iloc[np.where(z > 3)]
+        if cols:
+            col = st.selectbox("Column", cols)
 
-        c1, c2 = st.columns(2)
-        c1.metric("Outliers", len(outliers))
-        c2.metric("Risk", "High" if len(outliers) > 5 else "Low")
+            clean_series = df[col].dropna().reset_index(drop=True)
+            z = np.abs(stats.zscore(clean_series))
 
-        if not outliers.empty:
-            st.dataframe(outliers)
+            outliers = clean_series[z > 3]
+
+            st.metric("Outliers", len(outliers))
+            st.metric("Risk", "High" if len(outliers) > 5 else "Low")
+
+            if not outliers.empty:
+                st.dataframe(outliers.to_frame(name=col))
+
+        else:
+            st.warning("No numeric columns found")
 
     else:
         st.warning("Upload data first")
@@ -189,27 +214,34 @@ elif menu == "🤖 ML Engine":
     st.title("🤖 Machine Learning")
     df = st.session_state.merged_df
 
-    if df is not None:
-        df = df.dropna()
-        cols = df.select_dtypes(include=np.number).columns
+    if df is not None and not df.empty:
+        df = df.dropna().reset_index(drop=True)
+        cols = df.select_dtypes(include=np.number).columns.tolist()
 
-        target = st.selectbox("Target", cols)
-        feats = st.multiselect("Features", [c for c in cols if c != target])
+        if len(cols) >= 2:
+            target = st.selectbox("Target", cols)
+            feats = st.multiselect("Features", [c for c in cols if c != target])
 
-        if st.button("Train Model") and feats:
-            X_train, X_test, y_train, y_test = train_test_split(
-                df[feats], df[target], test_size=0.2, random_state=42
-            )
+            if st.button("Train Model") and feats:
+                try:
+                    X_train, X_test, y_train, y_test = train_test_split(
+                        df[feats], df[target], test_size=0.2, random_state=42
+                    )
 
-            model = LinearRegression().fit(X_train, y_train)
-            preds = model.predict(X_test)
+                    model = LinearRegression().fit(X_train, y_train)
+                    preds = model.predict(X_test)
 
-            st.metric("R² Score", f"{r2_score(y_test, preds):.2f}")
+                    st.metric("R² Score", f"{r2_score(y_test, preds):.2f}")
 
-            fig = px.scatter(x=y_test, y=preds,
-                             labels={"x": "Actual", "y": "Predicted"},
-                             title="Actual vs Predicted")
-            st.plotly_chart(fig)
+                    fig = px.scatter(x=y_test, y=preds,
+                                     labels={"x": "Actual", "y": "Predicted"},
+                                     title="Actual vs Predicted")
+                    st.plotly_chart(fig)
+
+                except Exception as e:
+                    st.error(e)
+        else:
+            st.warning("Need at least 2 numeric columns")
 
     else:
         st.warning("Upload data first")
@@ -219,7 +251,7 @@ elif menu == "🔍 SQL Workspace":
     st.title("🔍 SQL Lab")
     df = st.session_state.merged_df
 
-    if df is not None:
+    if df is not None and not df.empty:
         query = st.text_area("SQL Query", "SELECT * FROM df LIMIT 10")
 
         if st.button("Run"):
