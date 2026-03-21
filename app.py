@@ -10,7 +10,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import r2_score
 
 # ---------------- PAGE CONFIG ----------------
-st.set_page_config(page_title="DataSage AI Pro", layout="wide", page_icon="🧪")
+st.set_page_config(page_title="DataBoss AI Pro", layout="wide", page_icon="🧪")
 
 st.markdown("""
 <style>
@@ -25,8 +25,8 @@ if 'merged_df' not in st.session_state:
 
 # ---------------- SIDEBAR ----------------
 with st.sidebar:
-    st.title("🛡️ DataSage AI Pro")
-    st.write("KLEF CSE Edition")
+    st.title("🛡️ DataBoss AI Pro")
+    st.write("Analyst Edition")
     menu = st.radio("Modules", [
         "📁 Data Integration",
         "🧹 Stat-Cleaning",
