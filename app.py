@@ -37,6 +37,13 @@ with st.sidebar:
         "🔍 SQL Workspace"
     ])
 
+# ---------------- GLOBAL DATA VIEW ----------------
+if st.session_state.merged_df is not None:
+    st.subheader("📌 Current Dataset")
+    df_preview = st.session_state.merged_df
+    st.write(f"Rows: {df_preview.shape[0]}, Columns: {df_preview.shape[1]}")
+    st.dataframe(df_preview)
+
 # ---------------- 1. DATA INTEGRATION ----------------
 if menu == "📁 Data Integration":
     st.title("📂 Data Integration")
@@ -56,24 +63,45 @@ if menu == "📁 Data Integration":
 
         if len(dfs) >= 2:
             st.subheader("🔗 Merge Datasets")
+
             keys = list(dfs.keys())
             t1 = st.selectbox("Dataset A", keys)
             t2 = st.selectbox("Dataset B", keys)
 
-            common_cols = list(set(dfs[t1].columns).intersection(set(dfs[t2].columns)))
+            join_type = st.selectbox(
+                "Join Type",
+                ["inner", "left", "right", "outer", "cross"]
+            )
 
-            if common_cols:
-                join_col = st.selectbox("Join Column", common_cols)
+            if join_type != "cross":
+                common_cols = list(set(dfs[t1].columns).intersection(set(dfs[t2].columns)))
 
-                if st.button("Merge"):
+                if common_cols:
+                    join_col = st.selectbox("Join Column", common_cols)
+
+                    if st.button("Merge"):
+                        try:
+                            merged = pd.merge(
+                                dfs[t1],
+                                dfs[t2],
+                                on=join_col,
+                                how=join_type
+                            )
+                            st.session_state.merged_df = merged.reset_index(drop=True)
+                            st.success(f"{join_type.upper()} JOIN applied successfully.")
+                        except Exception as e:
+                            st.error(e)
+                else:
+                    st.error("No common columns found for join")
+
+            else:
+                if st.button("Merge (Cross Join)"):
                     try:
-                        merged = pd.merge(dfs[t1], dfs[t2], on=join_col, how="inner")
+                        merged = dfs[t1].merge(dfs[t2], how="cross")
                         st.session_state.merged_df = merged.reset_index(drop=True)
-                        st.success("Datasets merged successfully.")
+                        st.success("CROSS JOIN applied successfully.")
                     except Exception as e:
                         st.error(e)
-            else:
-                st.error("No common columns to join")
 
 # ---------------- 2. STAT CLEANING ----------------
 elif menu == "🧹 Stat-Cleaning":
@@ -117,7 +145,6 @@ elif menu == "🧹 Stat-Cleaning":
                     st.success("Cleaning applied")
         else:
             st.warning("No numeric columns found")
-
     else:
         st.warning("Upload data first")
 
@@ -148,7 +175,6 @@ elif menu == "📊 Visualization":
                 st.plotly_chart(fig, width='stretch')
             except Exception as e:
                 st.error(e)
-
     else:
         st.warning("Upload data first")
 
@@ -177,7 +203,6 @@ elif menu == "🔬 Inference Lab":
                     st.error(e)
         else:
             st.warning("Need at least 2 numeric columns")
-
     else:
         st.warning("Upload data first")
 
@@ -202,10 +227,8 @@ elif menu == "📉 Risk Analytics":
 
             if not outliers.empty:
                 st.dataframe(outliers.to_frame(name=col))
-
         else:
             st.warning("No numeric columns found")
-
     else:
         st.warning("Upload data first")
 
@@ -242,7 +265,6 @@ elif menu == "🤖 ML Engine":
                     st.error(e)
         else:
             st.warning("Need at least 2 numeric columns")
-
     else:
         st.warning("Upload data first")
 
@@ -260,6 +282,5 @@ elif menu == "🔍 SQL Workspace":
                 st.dataframe(result)
             except Exception as e:
                 st.error(e)
-
     else:
         st.warning("Upload data first")
