@@ -3,396 +3,196 @@ import pandas as pd
 import numpy as np
 import plotly.express as px
 import pandasql as ps
+from scipy import stats
+from scipy.stats import skew, ttest_ind
 from sklearn.linear_model import LinearRegression
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import r2_score
 
-st.set_page_config(page_title="DataSage AI Pro", layout="wide")
+# ---------------- PAGE CONFIG ----------------
+st.set_page_config(page_title="DataSage AI Pro", layout="wide", page_icon="🧪")
 
-# ---------------- SESSION STORAGE ----------------
+st.markdown("""
+<style>
+.main { background-color: #0e1117; }
+.stMetric { background-color: #1e2130; padding: 12px; border-radius: 10px; border: 1px solid #3e4259; }
+</style>
+""", unsafe_allow_html=True)
 
-if "dataframes" not in st.session_state:
-    st.session_state.dataframes = {}
-
-if "merged_df" not in st.session_state:
+# ---------------- SESSION ----------------
+if 'merged_df' not in st.session_state:
     st.session_state.merged_df = None
 
-if "charts" not in st.session_state:
-    st.session_state.charts = []
-
 # ---------------- SIDEBAR ----------------
+with st.sidebar:
+    st.title("🛡️ DataSage AI Pro")
+    st.write("KLEF CSE Edition")
+    menu = st.radio("Modules", [
+        "📁 Data Integration",
+        "🧹 Stat-Cleaning",
+        "🔬 Inference Lab",
+        "📉 Risk Analytics",
+        "🤖 ML Engine",
+        "🔍 SQL Workspace"
+    ])
 
-st.sidebar.title("🚀 DataSage AI Pro")
-
-menu = st.sidebar.radio(
-    "Navigation",
-    [
-        "Upload Data",
-        "Data Cleaning",
-        "Visualization",
-        "AI Insights",
-        "SQL Lab",
-        "ML Prediction",
-        "AI Query",
-        "Chat with AI"
-    ],
-)
-
-# ---------------- HELPER ----------------
-
-def get_df():
-    if st.session_state.merged_df is not None:
-        return st.session_state.merged_df
-    elif st.session_state.dataframes:
-        return list(st.session_state.dataframes.values())[0]
-    else:
-        return None
-
-
-# ---------------- UPLOAD ----------------
-
-if menu == "Upload Data":
-
-    st.title("📂 Upload CSV Dataset")
-
-    files = st.file_uploader(
-        "Upload CSV Files", type=["csv"], accept_multiple_files=True
-    )
+# ---------------- 1. DATA INTEGRATION ----------------
+if menu == "📁 Data Integration":
+    st.title("📂 Data Integration")
+    files = st.file_uploader("Upload CSV files", type="csv", accept_multiple_files=True)
 
     if files:
+        dfs = {f.name: pd.read_csv(f) for f in files}
 
-        for file in files:
-            df = pd.read_csv(file)
-            st.session_state.dataframes[file.name] = df
+        for name, df in dfs.items():
+            st.subheader(name)
+            st.write(f"Rows: {df.shape[0]}, Columns: {df.shape[1]}")
+            st.dataframe(df)
 
-        st.success("Files uploaded successfully")
+        # If only 1 file → auto select
+        if len(dfs) == 1:
+            st.session_state.merged_df = list(dfs.values())[0]
+            st.success("Single dataset loaded.")
 
-    for name, df in st.session_state.dataframes.items():
+        # If 2+ files → merge option
+        if len(dfs) >= 2:
+            st.subheader("🔗 Merge Datasets")
+            keys = list(dfs.keys())
+            t1 = st.selectbox("Dataset A", keys)
+            t2 = st.selectbox("Dataset B", keys)
+            join_col = st.text_input("Join Column")
 
-        st.subheader(name)
+            if st.button("Merge"):
+                try:
+                    st.session_state.merged_df = pd.merge(dfs[t1], dfs[t2], on=join_col, how="inner")
+                    st.success("Datasets merged successfully.")
+                except Exception as e:
+                    st.error(e)
 
-        st.write(f"Rows: {df.shape[0]}")
-        st.write(f"Columns: {df.shape[1]}")
-
-        st.dataframe(df)
-
-
-# ---------------- DATA CLEANING ----------------
-
-elif menu == "Data Cleaning":
-
-    st.title("🧹 Data Cleaning")
-
-    df = get_df()
-
-    if df is not None:
-
-        st.write("Missing Values")
-
-        st.write(df.isnull().sum())
-
-        option = st.selectbox(
-            "Handle Missing Values",
-            ["Fill Mean", "Fill Median", "Drop Rows"],
-        )
-
-        if st.button("Apply Cleaning"):
-
-            if option == "Fill Mean":
-                df = df.fillna(df.mean(numeric_only=True))
-
-            elif option == "Fill Median":
-                df = df.fillna(df.median(numeric_only=True))
-
-            else:
-                df = df.dropna()
-
-            st.session_state.merged_df = df
-
-            st.success("Cleaning Applied")
-
-        st.write("Duplicate rows:", df.duplicated().sum())
-
-        if st.button("Remove Duplicates"):
-
-            df = df.drop_duplicates()
-
-            st.session_state.merged_df = df
-
-            st.success("Duplicates Removed")
-
-        st.dataframe(df)
-
-    else:
-
-        st.warning("Upload dataset first")
-
-
-# ---------------- VISUALIZATION ----------------
-
-elif menu == "Visualization":
-
-    st.title("📊 Data Visualization")
-
-    df = get_df()
+# ---------------- 2. STAT CLEANING ----------------
+elif menu == "🧹 Stat-Cleaning":
+    st.title("🧹 Statistical Cleaning")
+    df = st.session_state.merged_df
 
     if df is not None:
-
         num_cols = df.select_dtypes(include=np.number).columns
-        all_cols = df.columns
+        col = st.selectbox("Select Column", num_cols)
 
-        chart = st.selectbox(
-            "Chart Type",
-            ["Bar Chart", "Histogram", "Scatter Plot", "Line Chart"],
-        )
+        skew_val = skew(df[col].dropna())
+        st.metric("Skewness", f"{skew_val:.2f}")
 
-        fig = None
+        if abs(skew_val) > 0.5:
+            st.warning("High skew → Median preferred")
+        else:
+            st.success("Normal distribution → Mean is fine")
 
-        if chart == "Bar Chart":
+        method = st.radio("Method", ["Mean", "Median", "Drop Nulls"])
 
-            x = st.selectbox("X Axis", all_cols)
-            y = st.selectbox("Y Axis", num_cols)
+        if st.button("Apply"):
+            if method == "Mean":
+                df[col] = df[col].fillna(df[col].mean())
+            elif method == "Median":
+                df[col] = df[col].fillna(df[col].median())
+            else:
+                df = df.dropna(subset=[col])
 
-            fig = px.bar(df, x=x, y=y)
-
-        elif chart == "Histogram":
-
-            col = st.selectbox("Column", num_cols)
-
-            fig = px.histogram(df, x=col)
-
-        elif chart == "Scatter Plot":
-
-            x = st.selectbox("X", num_cols)
-            y = st.selectbox("Y", num_cols)
-
-            fig = px.scatter(df, x=x, y=y)
-
-        elif chart == "Line Chart":
-
-            col = st.selectbox("Column", num_cols)
-
-            fig = px.line(df, y=col)
-
-        if fig:
-
-            st.plotly_chart(fig, use_container_width=True)
+            st.session_state.merged_df = df
+            st.success("Cleaning applied")
 
     else:
+        st.warning("Upload data first")
 
-        st.warning("Upload dataset first")
-
-
-# ---------------- AI INSIGHTS ----------------
-
-elif menu == "AI Insights":
-
-    st.title("🧠 AI Insights")
-
-    df = get_df()
+# ---------------- 3. INFERENCE ----------------
+elif menu == "🔬 Inference Lab":
+    st.title("🔬 Hypothesis Testing")
+    df = st.session_state.merged_df
 
     if df is not None:
+        cols = df.select_dtypes(include=np.number).columns
+        c1, c2 = st.columns(2)
 
-        if st.button("Generate Insights"):
+        v1 = c1.selectbox("Variable 1", cols)
+        v2 = c2.selectbox("Variable 2", cols)
 
-            st.write(df.describe())
+        if st.button("Run T-Test"):
+            t_stat, p_val = ttest_ind(df[v1].dropna(), df[v2].dropna())
 
-            for col in df.select_dtypes(include=np.number).columns:
+            st.write(f"P-value: {p_val:.4f}")
 
-                skew = df[col].skew()
-
-                if skew > 1:
-                    st.warning(f"{col} is right skewed")
-
-                elif skew < -1:
-                    st.warning(f"{col} is left skewed")
-
-                else:
-                    st.success(f"{col} is normally distributed")
+            if p_val < 0.05:
+                st.success("Statistically Significant")
+            else:
+                st.error("Not Significant")
 
     else:
+        st.warning("Upload data first")
 
-        st.warning("Upload dataset first")
-
-
-# ---------------- SQL LAB ----------------
-
-elif menu == "SQL Lab":
-
-    st.title("🗄️ SQL Query Lab")
-
-    df = get_df()
+# ---------------- 4. RISK ANALYTICS ----------------
+elif menu == "📉 Risk Analytics":
+    st.title("📉 Outlier Detection")
+    df = st.session_state.merged_df
 
     if df is not None:
+        cols = df.select_dtypes(include=np.number).columns
+        col = st.selectbox("Column", cols)
 
-        query = st.text_area(
-            "Write SQL Query",
-            "SELECT * FROM df LIMIT 10",
-        )
+        z = np.abs(stats.zscore(df[col].dropna()))
+        outliers = df.iloc[np.where(z > 3)]
 
-        if st.button("Run Query"):
+        c1, c2 = st.columns(2)
+        c1.metric("Outliers", len(outliers))
+        c2.metric("Risk", "High" if len(outliers) > 5 else "Low")
 
+        if not outliers.empty:
+            st.dataframe(outliers)
+
+    else:
+        st.warning("Upload data first")
+
+# ---------------- 5. ML ENGINE ----------------
+elif menu == "🤖 ML Engine":
+    st.title("🤖 Machine Learning")
+    df = st.session_state.merged_df
+
+    if df is not None:
+        df = df.dropna()
+        cols = df.select_dtypes(include=np.number).columns
+
+        target = st.selectbox("Target", cols)
+        feats = st.multiselect("Features", [c for c in cols if c != target])
+
+        if st.button("Train Model") and feats:
+            X_train, X_test, y_train, y_test = train_test_split(
+                df[feats], df[target], test_size=0.2, random_state=42
+            )
+
+            model = LinearRegression().fit(X_train, y_train)
+            preds = model.predict(X_test)
+
+            st.metric("R² Score", f"{r2_score(y_test, preds):.2f}")
+
+            fig = px.scatter(x=y_test, y=preds,
+                             labels={"x": "Actual", "y": "Predicted"},
+                             title="Actual vs Predicted")
+            st.plotly_chart(fig)
+
+    else:
+        st.warning("Upload data first")
+
+# ---------------- 6. SQL ----------------
+elif menu == "🔍 SQL Workspace":
+    st.title("🔍 SQL Lab")
+    df = st.session_state.merged_df
+
+    if df is not None:
+        query = st.text_area("SQL Query", "SELECT * FROM df LIMIT 10")
+
+        if st.button("Run"):
             try:
-
                 result = ps.sqldf(query, {"df": df})
-
                 st.dataframe(result)
-
             except Exception as e:
-
                 st.error(e)
 
     else:
-
-        st.warning("Upload dataset first")
-
-
-# ---------------- ML PREDICTION ----------------
-
-elif menu == "ML Prediction":
-
-    st.title("🤖 Machine Learning Prediction")
-
-    df = get_df()
-
-    if df is not None:
-
-        df = df.dropna()
-
-        num_cols = df.select_dtypes(include=np.number).columns
-
-        if len(num_cols) >= 2:
-
-            target = st.selectbox("Target Column", num_cols)
-
-            features = st.multiselect(
-                "Feature Columns",
-                [c for c in num_cols if c != target],
-            )
-
-            if st.button("Train Model") and features:
-
-                X = df[features]
-                y = df[target]
-
-                model = LinearRegression()
-
-                model.fit(X, y)
-
-                score = model.score(X, y)
-
-                st.metric("Model R² Score", round(score, 2))
-
-                st.success("Model trained successfully")
-
-    else:
-
-        st.warning("Upload dataset first")
-
-
-# ---------------- AI QUERY ----------------
-
-elif menu == "AI Query":
-
-    st.title("🔍 Natural Language Query")
-
-    df = get_df()
-
-    if df is not None:
-
-        question = st.text_input("Ask question about dataset")
-
-        if st.button("Run Query"):
-
-            q = question.lower()
-
-            if "top" in q:
-
-                n = int("".join(filter(str.isdigit, q)) or 5)
-
-                st.dataframe(df.head(n))
-
-            elif "mean" in q:
-
-                st.dataframe(
-                    df.mean(numeric_only=True).to_frame("Mean")
-                )
-
-            elif "max" in q:
-
-                st.dataframe(
-                    df.max(numeric_only=True).to_frame("Max")
-                )
-
-            elif "min" in q:
-
-                st.dataframe(
-                    df.min(numeric_only=True).to_frame("Min")
-                )
-
-            else:
-
-                st.warning("Query not recognized")
-
-    else:
-
-        st.warning("Upload dataset first")
-
-
-# ---------------- CHAT WITH AI ----------------
-
-elif menu == "Chat with AI":
-
-    st.title("🤖 Chat with Your Data")
-
-    df = get_df()
-
-    if df is not None:
-
-        if "chat_history" not in st.session_state:
-            st.session_state.chat_history = []
-
-        user_input = st.text_input("Ask something about the dataset")
-
-        if st.button("Ask AI"):
-
-            question = user_input.lower()
-
-            response = None
-
-            if "rows" in question:
-                response = f"The dataset has {df.shape[0]} rows."
-
-            elif "columns" in question:
-                response = f"The dataset has {df.shape[1]} columns."
-
-            elif "top" in question:
-                response = df.head()
-
-            elif "summary" in question:
-                response = df.describe()
-
-            elif "mean" in question:
-                response = df.mean(numeric_only=True)
-
-            elif "max" in question:
-                response = df.max(numeric_only=True)
-
-            elif "min" in question:
-                response = df.min(numeric_only=True)
-
-            else:
-                response = "Sorry, I don't understand that question yet."
-
-            st.session_state.chat_history.append(("You", user_input))
-            st.session_state.chat_history.append(("AI", response))
-
-        for speaker, message in st.session_state.chat_history:
-
-            if speaker == "You":
-                st.write(f"🧑 **You:** {message}")
-            else:
-                st.write("🤖 **AI:**")
-                st.write(message)
-
-    else:
-
-        st.warning("Upload dataset first")
+        st.warning("Upload data first")
